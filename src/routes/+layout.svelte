@@ -15,7 +15,10 @@
 	}
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+	<link rel="icon" href={favicon} />
+	<link rel="manifest" href="/manifest.webmanifest" />
+</svelte:head>
 
 <nav class="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
 	<div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">

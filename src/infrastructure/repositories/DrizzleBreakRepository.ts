@@ -16,10 +16,13 @@ export class DrizzleBreakRepository {
 		return db.select().from(breakPeriod).where(eq(breakPeriod.timeEntryId, timeEntryId));
 	}
 
-	async start(timeEntryId: number): Promise<typeof breakPeriod.$inferSelect> {
+	async start(
+		timeEntryId: number,
+		startTime: Date = new Date()
+	): Promise<typeof breakPeriod.$inferSelect> {
 		const [row] = await db
 			.insert(breakPeriod)
-			.values({ timeEntryId, startTime: new Date() })
+			.values({ timeEntryId, startTime })
 			.returning();
 		return row;
 	}

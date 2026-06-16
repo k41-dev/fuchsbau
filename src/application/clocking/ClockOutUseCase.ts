@@ -8,7 +8,7 @@ export class ClockOutUseCase {
 		private readonly breakRepository: DrizzleBreakRepository = new DrizzleBreakRepository()
 	) {}
 
-	async execute(userId: string): Promise<TimeEntry> {
+	async execute(userId: string, endTime: Date = new Date()): Promise<TimeEntry> {
 		const activeEntry = await this.timeEntryRepository.findActiveByUserId(userId);
 
 		if (!activeEntry) {
@@ -19,7 +19,6 @@ export class ClockOutUseCase {
 			throw new Error('Time entry is already stopped.');
 		}
 
-		const endTime = new Date();
 		if (activeEntry.id) {
 			await this.breakRepository.closeOpenBreaks(activeEntry.id, endTime);
 		}

@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { getLoginRedirect, isPublicRoute, resolveRedirectTarget } from './route-guard';
 
 describe('isPublicRoute', () => {
-	it('allows home, login, register, and auth API', () => {
+	it('allows home, login, register, auth API, and PWA assets', () => {
 		expect(isPublicRoute('/')).toBe(true);
 		expect(isPublicRoute('/login')).toBe(true);
 		expect(isPublicRoute('/register')).toBe(true);
 		expect(isPublicRoute('/api/auth/sign-in')).toBe(true);
+		expect(isPublicRoute('/manifest.webmanifest')).toBe(true);
+		expect(isPublicRoute('/sw.js')).toBe(true);
 	});
 
 	it('requires auth for app routes', () => {

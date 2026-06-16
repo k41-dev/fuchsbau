@@ -2,8 +2,13 @@ const PUBLIC_PATHS = new Set(['/', '/login', '/register']);
 
 const PUBLIC_PREFIXES = ['/api/auth'];
 
+const PUBLIC_FILES = new Set(['/manifest.webmanifest', '/manifest.json', '/sw.js', '/pwa-icon.svg']);
+
 export function isPublicRoute(pathname: string): boolean {
 	if (PUBLIC_PATHS.has(pathname)) return true;
+	if (PUBLIC_FILES.has(pathname)) return true;
+	if (pathname.startsWith('/workbox-')) return true;
+	if (pathname.startsWith('/~') || pathname.startsWith('/@')) return true;
 	return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 

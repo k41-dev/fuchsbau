@@ -14,6 +14,7 @@ import { EndBreakUseCase } from '../../../application/clocking/EndBreakUseCase';
 import { ReportAbsenceUseCase } from '../../../application/clocking/ReportAbsenceUseCase';
 import { CancelAbsenceUseCase } from '../../../application/clocking/CancelAbsenceUseCase';
 import type { AbsenceType } from '$lib/absence';
+import { parseClientTimestamp } from '$lib/server/client-timestamp';
 
 const timeEntryRepo = new DrizzleTimeEntryRepository();
 const breakRepo = new DrizzleBreakRepository();
@@ -36,8 +37,11 @@ async function handleAction(
 		note?: string;
 		startDate?: string;
 		endDate?: string;
+		clientTimestamp?: string;
 	}
 ) {
+	const clientTime = parseClientTimestamp(body.clientTimestamp);
+
 	switch (body.action) {
 		case 'status':
 			return { status: await getWorkerStatus(userId) };
@@ -56,21 +60,22 @@ async function handleAction(
 			await clockInUseCase.execute({
 				userId,
 				projectId: body.projectId,
-				roleId: body.roleId ?? null
+				roleId: body.roleId ?? null,
+				startTime: clientTime
 			});
 			return { status: await getWorkerStatus(userId) };
 		}
 
 		case 'clock-out':
-			await clockOutUseCase.execute(userId);
+			await clockOutUseCase.execute(userId, clientTime);
 			return { status: await getWorkerStatus(userId) };
 
 		case 'start-break':
-			await startBreakUseCase.execute(userId);
+			await startBreakUseCase.execute(userId, clientTime);
 			return { status: await getWorkerStatus(userId) };
 
 		case 'end-break':
-			await endBreakUseCase.execute(userId);
+			await endBreakUseCase.execute(userId, clientTime);
 			return { status: await getWorkerStatus(userId) };
 
 		case 'report-absence':

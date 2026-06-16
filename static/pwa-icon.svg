@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Fuchsbau">
+  <rect width="512" height="512" rx="96" fill="#059669"/>
+  <path
+    fill="#ffffff"
+    d="M156 360c0-72 48-120 100-120s100 48 100 120v24H156v-24zm100-176c41 0 76 33 76 76h-48c0-15-13-28-28-28s-28 13-28 28h-48c0-43 35-76 76-76z"
+  />
+  <path fill="#d1fae5" d="M96 160h64v48H96zm256 0h64v48h-64z"/>
+</svg>

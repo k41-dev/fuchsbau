@@ -84,3 +84,20 @@ Unit tests run without extra setup. Integration tests use `DATABASE_URL` from `.
 ```bash
 npm run test
 ```
+
+## Offline & PWA (worker home)
+
+The worker dashboard (`/`) supports poor-signal job sites:
+
+- **Offline queue** — clock-in/out, breaks, and absences are saved to IndexedDB (Dexie) when the network is unavailable
+- **Optimistic UI** — timers keep running locally while offline
+- **Auto-sync** — queued actions replay when you reconnect, using the original tap time (`clientTimestamp`)
+- **Installable app** — add to home screen on mobile (PWA manifest + service worker)
+
+Visit the app online once while signed in so job sites are cached. Supervisor routes (`/projects`, `/reports`) require a live connection.
+
+### Install on phone
+
+1. Open `http://<your-host>:5173` in Chrome/Safari while on the same network
+2. **Android:** menu → *Install app* / *Add to Home screen*
+3. **iOS:** Share → *Add to Home Screen*

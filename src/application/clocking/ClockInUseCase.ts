@@ -12,6 +12,7 @@ export class ClockInUseCase {
     projectId?: number | null;
     roleId?: number | null;
     description?: string | null;
+    startTime?: Date;
   }): Promise<TimeEntry> {
     const today = new Date().toISOString().slice(0, 10);
     const [todayAbsence] = await db
@@ -34,7 +35,7 @@ export class ClockInUseCase {
       projectId: params.projectId,
       roleId: params.roleId,
       description: params.description,
-      startTime: new Date(),
+      startTime: params.startTime ?? new Date(),
     });
 
     return this.timeEntryRepository.save(newEntry);

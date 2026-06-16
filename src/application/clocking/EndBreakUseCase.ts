@@ -7,7 +7,7 @@ export class EndBreakUseCase {
 		private readonly breakRepository: DrizzleBreakRepository
 	) {}
 
-	async execute(userId: string) {
+	async execute(userId: string, endTime: Date = new Date()) {
 		const activeEntry = await this.timeEntryRepository.findActiveByUserId(userId);
 		if (!activeEntry?.id) {
 			throw new Error('No active time entry found');
@@ -18,7 +18,7 @@ export class EndBreakUseCase {
 			throw new Error('You are not currently on a break');
 		}
 
-		const breakPeriod = await this.breakRepository.end(openBreak.id);
+		const breakPeriod = await this.breakRepository.end(openBreak.id, endTime);
 		return { entry: activeEntry, breakPeriod };
 	}
 }

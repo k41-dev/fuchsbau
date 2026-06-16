@@ -4,10 +4,23 @@
 	import type { WorkerStatus } from '$lib/server/worker-status';
 	import type { AbsenceType } from '$lib/absence';
 	import { todayString } from '$lib/absence';
+	import type { CachedProject, WorkerActionName } from '$lib/offline/types';
+	import {
+		buildOfflineStatus,
+		getPendingCount,
+		performWorkerAction,
+		saveWorkerCache,
+		syncPendingActions
+	} from '$lib/offline/worker-offline';
 
 	let { data }: { data: PageData } = $props();
 
+	let projects = $state<CachedProject[]>([]);
 	let status = $state<WorkerStatus | null>(null);
+	let isOnline = $state(true);
+	let pendingCount = $state(0);
+	let isSyncing = $state(false);
+	let syncNotice = $state<string | null>(null);
 	let selectedProjectId = $state<number | null>(null);
 	let selectedRoleId = $state<number | null>(null);
 	let isLoading = $state(false);
@@ -55,45 +68,81 @@
 			: formatSeconds(status.entry.breakSeconds);
 	}
 
-	async function workerAction(action: string, extra: Record<string, unknown> = {}) {
+	async function refreshPendingCount() {
+		pendingCount = await getPendingCount();
+	}
+
+	async function runSync() {
+		if (!data.user || isSyncing) return;
+
+		isSyncing = true;
+		syncNotice = null;
+
+		const result = await syncPendingActions();
+		await refreshPendingCount();
+
+		if (result.failed) {
+			error = result.failed;
+		} else if (result.status) {
+			status = result.status;
+			await saveWorkerCache({
+				userId: data.user.id,
+				projects,
+				status: result.status,
+				updatedAt: Date.now()
+			});
+			if (result.synced > 0) {
+				syncNotice = `Synced ${result.synced} offline action${result.synced === 1 ? '' : 's'}`;
+			}
+		}
+
+		isSyncing = false;
+	}
+
+	async function workerAction(action: WorkerActionName, extra: Record<string, unknown> = {}) {
+		if (!data.user) return;
+
 		isLoading = true;
 		error = null;
+		syncNotice = null;
 
-		try {
-			const res = await fetch('/api/worker', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({ action, ...extra })
-			});
-			const result = await res.json();
+		const result = await performWorkerAction({
+			userId: data.user.id,
+			action,
+			payload: extra,
+			projects,
+			currentStatus: status
+		});
 
-			if (result.success) {
-				status = result.status;
-				if (action === 'clock-in') {
-					if (selectedProjectId && selectedRoleId) {
-						localStorage.setItem(
-							`fuchsbau:lastRole:${selectedProjectId}`,
-							String(selectedRoleId)
-						);
-					}
-					selectedProjectId = null;
-					selectedRoleId = null;
-				}
-				if (action === 'clock-out' || action === 'report-absence') {
-					absenceFlow = 'closed';
-					absenceNote = '';
-					vacationStart = todayString();
-					vacationEnd = todayString();
-				}
-			} else {
-				error = result.error;
+		if (result.success) {
+			status = result.status ?? status;
+			await refreshPendingCount();
+
+			if (result.queued) {
+				syncNotice = 'Saved offline — will sync when you are back online';
 			}
-		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Something went wrong';
-		} finally {
-			isLoading = false;
+
+			if (action === 'clock-in') {
+				if (selectedProjectId && selectedRoleId) {
+					localStorage.setItem(
+						`fuchsbau:lastRole:${selectedProjectId}`,
+						String(selectedRoleId)
+					);
+				}
+				selectedProjectId = null;
+				selectedRoleId = null;
+			}
+			if (action === 'clock-out' || action === 'report-absence') {
+				absenceFlow = 'closed';
+				absenceNote = '';
+				vacationStart = todayString();
+				vacationEnd = todayString();
+			}
+		} else {
+			error = result.error ?? 'Something went wrong';
 		}
+
+		isLoading = false;
 	}
 
 	function startTimer() {
@@ -120,7 +169,7 @@
 	);
 
 	const selectedProject = $derived(
-		data.projects.find((p) => p.id === selectedProjectId) ?? null
+		projects.find((p) => p.id === selectedProjectId) ?? null
 	);
 
 	const canClockIn = $derived(
@@ -132,7 +181,7 @@
 		selectedProjectId = projectId;
 		selectedRoleId = null;
 
-		const project = data.projects.find((p) => p.id === projectId);
+		const project = projects.find((p) => p.id === projectId);
 		if (!project?.roles.length) return;
 
 		const saved = localStorage.getItem(`fuchsbau:lastRole:${projectId}`);
@@ -180,13 +229,60 @@
 	}
 
 	onMount(() => {
-		status = data.workerStatus;
-		if (data.workerStatus?.state === 'working' || data.workerStatus?.state === 'on_break') {
-			startTimer();
-		}
-		if (data.projects.length === 1) {
-			selectProject(data.projects[0].id);
-		}
+		isOnline = navigator.onLine;
+
+		const handleOnline = () => {
+			isOnline = true;
+			void runSync();
+		};
+		const handleOffline = () => {
+			isOnline = false;
+		};
+
+		window.addEventListener('online', handleOnline);
+		window.addEventListener('offline', handleOffline);
+
+		void (async () => {
+			projects = data.projects.map((p) => ({
+				id: p.id,
+				name: p.name,
+				address: p.address,
+				roles: p.roles
+			}));
+
+			if (data.user) {
+				if (!navigator.onLine) {
+					const offlineStatus = await buildOfflineStatus(data.user.id, projects);
+					status = offlineStatus ?? data.workerStatus;
+				} else {
+					status = data.workerStatus;
+					await saveWorkerCache({
+						userId: data.user.id,
+						projects,
+						status: data.workerStatus,
+						updatedAt: Date.now()
+					});
+					await runSync();
+				}
+
+				await refreshPendingCount();
+			} else {
+				status = data.workerStatus;
+			}
+
+			if (projects.length === 1) {
+				selectProject(projects[0].id);
+			}
+
+			if (status?.state === 'working' || status?.state === 'on_break') {
+				startTimer();
+			}
+		})();
+
+		return () => {
+			window.removeEventListener('online', handleOnline);
+			window.removeEventListener('offline', handleOffline);
+		};
 	});
 
 	onDestroy(stopTimer);
@@ -232,6 +328,27 @@
 				</a>
 			</div>
 		{:else}
+			{#if !isOnline}
+				<div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+					You are offline. Time tracking still works — changes sync when you reconnect.
+				</div>
+			{:else if isSyncing}
+				<div class="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+					Syncing offline changes...
+				</div>
+			{:else if pendingCount > 0}
+				<div class="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+					{pendingCount} action{pendingCount === 1 ? '' : 's'} waiting to sync.
+					<button type="button" onclick={() => runSync()} class="ml-2 font-medium underline">
+						Sync now
+					</button>
+				</div>
+			{:else if syncNotice}
+				<div class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+					{syncNotice}
+				</div>
+			{/if}
+
 			<!-- Status header -->
 			<div class="text-center mb-6">
 				<span class="inline-block px-4 py-1.5 rounded-full text-sm font-semibold {stateColor}">
@@ -310,7 +427,7 @@
 				<div class="mb-4">
 					<h2 class="text-lg font-semibold mb-3">Select job site</h2>
 					<div class="grid grid-cols-1 gap-3">
-						{#each data.projects as proj}
+						{#each projects as proj}
 							<button
 								type="button"
 								onclick={() => selectProject(proj.id)}

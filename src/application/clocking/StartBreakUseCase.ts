@@ -7,7 +7,7 @@ export class StartBreakUseCase {
 		private readonly breakRepository: DrizzleBreakRepository
 	) {}
 
-	async execute(userId: string) {
+	async execute(userId: string, startTime: Date = new Date()) {
 		const activeEntry = await this.timeEntryRepository.findActiveByUserId(userId);
 		if (!activeEntry?.id) {
 			throw new Error('You need to be clocked in to start a break');
@@ -18,7 +18,7 @@ export class StartBreakUseCase {
 			throw new Error('You are already on a break');
 		}
 
-		const breakPeriod = await this.breakRepository.start(activeEntry.id);
+		const breakPeriod = await this.breakRepository.start(activeEntry.id, startTime);
 		return { entry: activeEntry, breakPeriod };
 	}
 }
