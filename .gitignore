@@ -8,6 +8,9 @@ node_modules
 /.svelte-kit
 /build
 
+# Production Node output (adapter-node)
+build
+
 # OS
 .DS_Store
 Thumbs.db
@@ -16,6 +19,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.production.example
 !.env.test
 
 # Local / scratch

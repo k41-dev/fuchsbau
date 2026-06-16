@@ -9,6 +9,7 @@ describe('isPublicRoute', () => {
 		expect(isPublicRoute('/api/auth/sign-in')).toBe(true);
 		expect(isPublicRoute('/manifest.webmanifest')).toBe(true);
 		expect(isPublicRoute('/sw.js')).toBe(true);
+		expect(isPublicRoute('/api/health')).toBe(true);
 	});
 
 	it('requires auth for app routes', () => {

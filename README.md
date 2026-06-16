@@ -96,6 +96,71 @@ The worker dashboard (`/`) supports poor-signal job sites:
 
 Visit the app online once while signed in so job sites are cached. Supervisor routes (`/projects`, `/reports`) require a live connection.
 
+## Production deployment (Docker)
+
+The app ships as a Node server (`adapter-node`) with PostgreSQL. The recommended path is Docker Compose on a VPS (Hetzner, DigitalOcean, etc.) or any host with Docker.
+
+### 1. Configure production env
+
+```bash
+cp .env.production.example .env.production
+```
+
+Edit `.env.production`:
+
+| Variable | Example | Notes |
+|----------|---------|-------|
+| `ORIGIN` | `https://fuchsbau.example.com` | Public URL — required by SvelteKit behind HTTPS |
+| `BETTER_AUTH_URL` | same as `ORIGIN` | Must match browser URL exactly |
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` | Min 32 characters |
+| `POSTGRES_PASSWORD` | strong random password | Database password |
+| `APP_PORT` | `3000` | Host port exposed to the internet |
+
+### 2. Build and start
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+This will:
+
+1. Start PostgreSQL with a persistent volume
+2. Run Drizzle migrations automatically
+3. Start the app on port `3000` (or `APP_PORT`)
+
+Health check: `GET /api/health` → `{ "ok": true }`
+
+### 3. HTTPS reverse proxy
+
+Put **Caddy** or **nginx** in front of the app for TLS. Example Caddyfile:
+
+```caddy
+fuchsbau.example.com {
+  reverse_proxy localhost:3000
+}
+```
+
+Update `ORIGIN` and `BETTER_AUTH_URL` to `https://fuchsbau.example.com` before starting the stack.
+
+### 4. Updates
+
+```bash
+git pull
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+Migrations run on every container start.
+
+### Run without Docker
+
+```bash
+npm ci
+npm run build
+export DATABASE_URL=... BETTER_AUTH_SECRET=... BETTER_AUTH_URL=... ORIGIN=...
+npm run db:migrate:prod
+npm start
+```
+
 ### Install on phone
 
 1. Open `http://<your-host>:5173` in Chrome/Safari while on the same network

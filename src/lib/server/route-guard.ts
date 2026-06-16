@@ -1,6 +1,6 @@
 const PUBLIC_PATHS = new Set(['/', '/login', '/register']);
 
-const PUBLIC_PREFIXES = ['/api/auth'];
+const PUBLIC_PREFIXES = ['/api/auth', '/api/health'];
 
 const PUBLIC_FILES = new Set(['/manifest.webmanifest', '/manifest.json', '/sw.js', '/pwa-icon.svg']);
 
