@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fuchsbau-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fuchsbau
+    ports:
+      - "5432:5432"
+    volumes:
+      - fuchsbau-data:/var/lib/postgresql/data
+
+volumes:
+  fuchsbau-data:
