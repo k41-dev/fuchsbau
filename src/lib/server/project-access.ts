@@ -2,14 +2,33 @@ import { error } from '@sveltejs/kit';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../../infrastructure/db/client';
 import { project, projectMember } from '../../infrastructure/db/schema';
-import type { User } from 'better-auth';
+import type { AppUser } from '$lib/auth-user';
 
-export async function getProjectAccess(projectId: number, user: User) {
-	const [proj] = await db.select().from(project).where(eq(project.id, projectId)).limit(1);
+export async function getProjectAccess(projectId: number, user: AppUser) {
+	const [row] = await db
+		.select({
+			id: project.id,
+			name: project.name,
+			description: project.description,
+			address: project.address,
+			color: project.color,
+			backgroundImageContentType: project.backgroundImageContentType,
+			userId: project.userId,
+			createdAt: project.createdAt,
+			updatedAt: project.updatedAt
+		})
+		.from(project)
+		.where(eq(project.id, projectId))
+		.limit(1);
 
-	if (!proj) {
+	if (!row) {
 		throw error(404, 'Project not found');
 	}
+
+	const proj = {
+		...row,
+		hasBackgroundImage: Boolean(row.backgroundImageContentType)
+	};
 
 	const isOwner = proj.userId === user.id;
 

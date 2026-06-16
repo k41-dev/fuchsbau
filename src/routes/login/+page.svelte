@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
 	import type { PageData } from './$types';
 
@@ -27,7 +26,8 @@
 			return;
 		}
 
-		await goto(data.redirectTo);
+		// Full reload so the server applies role-aware redirects with DB-backed accountRole
+		window.location.href = `/login${window.location.search}`;
 	}
 </script>
 
@@ -80,8 +80,8 @@
 		</form>
 
 		<p class="text-center text-sm text-muted-foreground mt-6">
-			No account yet?
-			<a href="/register" class="text-foreground font-medium hover:underline">Create one</a>
+			Have an invite link?
+			<a href="/register" class="text-foreground font-medium hover:underline">Create account</a>
 		</p>
 	</div>
 </div>

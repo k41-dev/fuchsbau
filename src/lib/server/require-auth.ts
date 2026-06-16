@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
-import type { User } from 'better-auth';
+import type { AppUser } from '$lib/auth-user';
 
-export function requireUser(locals: App.Locals): User {
+export function requireUser(locals: App.Locals): AppUser {
 	if (!locals.user) {
 		throw redirect(303, '/login');
 	}

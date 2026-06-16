@@ -1,4 +1,21 @@
-import { pgTable, serial, text, timestamp, integer, boolean, uniqueIndex, date } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+	customType,
+	pgTable,
+	serial,
+	text,
+	timestamp,
+	integer,
+	boolean,
+	uniqueIndex,
+	date
+} from 'drizzle-orm/pg-core';
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+	dataType() {
+		return 'bytea';
+	}
+});
 
 // ============================================
 // Better Auth Tables (required)
@@ -9,6 +26,7 @@ export const user = pgTable('user', {
   email: text('email').notNull().unique(),
   emailVerified: boolean('email_verified').notNull().default(false),
   image: text('image'),
+  accountRole: text('account_role').notNull().default('worker'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -61,6 +79,8 @@ export const project = pgTable('project', {
   description: text('description'),
   address: text('address'),
   color: text('color').default('#3b82f6'),
+  backgroundImageData: bytea('background_image_data'),
+  backgroundImageContentType: text('background_image_content_type'),
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
@@ -98,6 +118,24 @@ export const role = pgTable('role', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+export const timeEntryCorrection = pgTable('time_entry_correction', {
+  id: serial('id').primaryKey(),
+  timeEntryId: integer('time_entry_id')
+    .notNull()
+    .references(() => timeEntry.id, { onDelete: 'cascade' }),
+  correctedByUserId: text('corrected_by_user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  previousStartTime: timestamp('previous_start_time').notNull(),
+  previousEndTime: timestamp('previous_end_time'),
+  previousDuration: integer('previous_duration'),
+  newStartTime: timestamp('new_start_time').notNull(),
+  newEndTime: timestamp('new_end_time'),
+  newDuration: integer('new_duration'),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const breakPeriod = pgTable('break_period', {
   id: serial('id').primaryKey(),
   timeEntryId: integer('time_entry_id')
@@ -118,10 +156,21 @@ export const absence = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     date: date('date').notNull(),
     type: text('type').notNull().default('sick'),
+    status: text('status').notNull().default('pending'),
+    requestGroupId: text('request_group_id').notNull(),
     note: text('note'),
+    reviewedByUserId: text('reviewed_by_user_id').references(() => user.id, {
+      onDelete: 'set null'
+    }),
+    reviewedAt: timestamp('reviewed_at'),
+    reviewNote: text('review_note'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('absence_user_date_unique').on(table.userId, table.date)]
+  (table) => [
+    uniqueIndex('absence_user_date_active_unique')
+      .on(table.userId, table.date)
+      .where(sql`status != 'rejected'`)
+  ]
 );
 
 export const projectMember = pgTable(
@@ -137,4 +186,31 @@ export const projectMember = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => [uniqueIndex('project_member_project_user_unique').on(table.projectId, table.userId)]
+);
+
+export const workerInvite = pgTable(
+  'worker_invite',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    token: text('token').notNull().unique(),
+    invitedByUserId: text('invited_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    acceptedByUserId: text('accepted_by_user_id').references(() => user.id, {
+      onDelete: 'set null'
+    }),
+    acceptedAt: timestamp('accepted_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('worker_invite_project_email_pending_unique')
+      .on(table.projectId, table.email)
+      .where(sql`status = 'pending'`)
+  ]
 );

@@ -1,3 +1,9 @@
+export {
+	isSupervisorRoute,
+	resolvePostLoginRedirect,
+	resolveRedirectTarget
+} from '$lib/navigation';
+
 const PUBLIC_PATHS = new Set(['/', '/login', '/register']);
 
 const PUBLIC_PREFIXES = ['/api/auth', '/api/health'];
@@ -19,16 +25,4 @@ export function getLoginRedirect(pathname: string, search: string): string {
 	}
 
 	return `/login?redirectTo=${encodeURIComponent(returnTo)}`;
-}
-
-export function resolveRedirectTarget(redirectTo: string | null | undefined): string {
-	if (!redirectTo || !redirectTo.startsWith('/') || redirectTo.startsWith('//')) {
-		return '/';
-	}
-
-	if (redirectTo.startsWith('/login') || redirectTo.startsWith('/register')) {
-		return '/';
-	}
-
-	return redirectTo;
 }

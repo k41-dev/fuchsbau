@@ -20,6 +20,18 @@
 	<link rel="manifest" href="/manifest.webmanifest" />
 </svelte:head>
 
+{#if data.accountRole === 'supervisor' && data.staleAlerts.length > 0}
+	<div class="border-b border-amber-200 bg-amber-50 px-4 py-3">
+		<div class="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-amber-950">
+			<p>
+				<strong>{data.staleAlerts.length}</strong>
+				forgotten clock-out{data.staleAlerts.length === 1 ? '' : 's'} across your job sites.
+			</p>
+			<a href="/projects" class="font-medium underline shrink-0">Review on Projects →</a>
+		</div>
+	</div>
+{/if}
+
 <nav class="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
 	<div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
 		<a href="/" class="font-semibold tracking-tight hover:opacity-80 transition-opacity">
@@ -27,12 +39,19 @@
 		</a>
 
 		<div class="flex items-center gap-2 sm:gap-3 text-sm">
-			<a href="/projects" class="hidden sm:inline px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">
-				Projects
-			</a>
-			<a href="/reports" class="hidden sm:inline px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">
-				Reports
-			</a>
+			{#if data.accountRole === 'worker'}
+				<a href="/my-sites" class="px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">
+					My sites
+				</a>
+			{/if}
+			{#if data.accountRole === 'supervisor'}
+				<a href="/projects" class="px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">
+					Projects
+				</a>
+				<a href="/reports" class="px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">
+					Reports
+				</a>
+			{/if}
 
 			{#if data.user || $session.data?.user}
 				<span class="text-muted-foreground hidden sm:inline">

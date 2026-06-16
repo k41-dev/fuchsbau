@@ -2,18 +2,19 @@ import { eq, inArray } from 'drizzle-orm';
 import { db } from '../infrastructure/db/client';
 import { absence, timeEntry, user } from '../infrastructure/db/schema';
 
-export async function createTestUser(suffix: string) {
+export async function createTestUser(suffix: string, email?: string) {
 	const id = `test-${suffix}`;
-	const email = `test-${suffix}@fuchsbau.test`;
+	const resolvedEmail = email ?? `test-${suffix}@fuchsbau.test`;
 
 	await db.insert(user).values({
 		id,
 		name: `Test ${suffix}`,
-		email,
-		emailVerified: true
+		email: resolvedEmail,
+		emailVerified: true,
+		accountRole: 'worker'
 	});
 
-	return { id, email };
+	return { id, email: resolvedEmail };
 }
 
 export async function deleteTestUsers(userIds: string[]) {

@@ -1,11 +1,11 @@
 import { eq, and, gte, lt } from 'drizzle-orm';
 import { db } from '../../infrastructure/db/client';
 import { timeEntry, user, role } from '../../infrastructure/db/schema';
-import type { AbsenceType } from '../absence';
+import { todayString, type AbsenceType } from '../absence';
 import { getNetWorkSeconds } from './time-utils';
+import { getStaleShiftInfo } from '$lib/stale-shift';
 import { getProjectDayAbsences, type CrewAbsence } from './absence-queries';
-
-const STALE_HOURS = 12;
+import { getStaleShiftConfig } from './stale-shift-config';
 
 export type ActiveWorker = {
 	entryId: number;
@@ -30,14 +30,6 @@ export type WorkerDaySummary = {
 	absenceNote: string | null;
 };
 
-export function toDateString(date: Date): string {
-	return date.toISOString().slice(0, 10);
-}
-
-export function getTodayString(): string {
-	return toDateString(new Date());
-}
-
 function getDayBounds(dateStr: string): { start: Date; end: Date } {
 	const start = new Date(dateStr);
 	start.setHours(0, 0, 0, 0);
@@ -47,21 +39,7 @@ function getDayBounds(dateStr: string): { start: Date; end: Date } {
 }
 
 function getStaleInfo(startTime: Date): { isStale: boolean; reason: string | null } {
-	const now = Date.now();
-	const elapsedHours = (now - startTime.getTime()) / (1000 * 60 * 60);
-
-	const todayStart = new Date();
-	todayStart.setHours(0, 0, 0, 0);
-
-	if (startTime < todayStart) {
-		return { isStale: true, reason: 'Still running since a previous day' };
-	}
-
-	if (elapsedHours >= STALE_HOURS) {
-		return { isStale: true, reason: `Running for ${Math.floor(elapsedHours)}+ hours` };
-	}
-
-	return { isStale: false, reason: null };
+	return getStaleShiftInfo(startTime, getStaleShiftConfig());
 }
 
 export async function getActiveWorkers(projectId: number): Promise<ActiveWorker[]> {
@@ -96,7 +74,7 @@ export async function getActiveWorkers(projectId: number): Promise<ActiveWorker[
 
 export async function getDaySummary(projectId: number, dateStr: string) {
 	const { start, end } = getDayBounds(dateStr);
-	const isToday = dateStr === getTodayString();
+	const isToday = dateStr === todayString();
 	const dayAbsences = await getProjectDayAbsences(projectId, dateStr);
 	const absenceByUser = new Map<string, CrewAbsence>(
 		dayAbsences.map((a) => [a.userId, a])

@@ -29,6 +29,48 @@
       "when": 1781603000000,
       "tag": "0003_worker_breaks_absence",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781604000000,
+      "tag": "0004_account_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781605000000,
+      "tag": "0005_time_entry_correction",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781606000000,
+      "tag": "0006_absence_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781607000000,
+      "tag": "0007_worker_invite",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781608000000,
+      "tag": "0008_project_background_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781609000000,
+      "tag": "0009_project_background_image_db",
+      "breakpoints": true
     }
   ]
 }

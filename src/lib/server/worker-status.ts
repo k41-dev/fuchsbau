@@ -3,11 +3,13 @@ import { db } from '../../infrastructure/db/client';
 import { absence, project, role } from '../../infrastructure/db/schema';
 import { DrizzleTimeEntryRepository } from '../../infrastructure/repositories/DrizzleTimeEntryRepository';
 import { DrizzleBreakRepository } from '../../infrastructure/repositories/DrizzleBreakRepository';
-import type { AbsenceType } from '../absence';
+import type { AbsenceStatus, AbsenceType } from '../absence';
+import { getStaleShiftInfo } from '$lib/stale-shift';
 import { todayString } from '../absence';
+import { getStaleShiftConfig } from './stale-shift-config';
 
 export type WorkerStatus = {
-	state: 'idle' | 'working' | 'on_break' | 'absent';
+	state: 'idle' | 'working' | 'on_break' | 'absent' | 'pending_absence';
 	entry: {
 		id: number;
 		projectId: number | null;
@@ -25,8 +27,14 @@ export type WorkerStatus = {
 	} | null;
 	absence: {
 		type: AbsenceType;
+		status: AbsenceStatus;
+		requestGroupId: string;
 		note: string | null;
 		date: string;
+	} | null;
+	forgottenClockOut: {
+		isStale: boolean;
+		reason: string | null;
 	} | null;
 };
 
@@ -44,17 +52,24 @@ export async function getWorkerStatus(userId: string): Promise<WorkerStatus> {
 	const activeEntry = await timeEntryRepo.findActiveByUserId(userId);
 
 	if (!activeEntry?.id) {
+		const absenceStatus = todayAbsence?.status as AbsenceStatus | undefined;
+		const isApproved = absenceStatus === 'approved';
+		const isPending = absenceStatus === 'pending';
+
 		return {
-			state: todayAbsence ? 'absent' : 'idle',
+			state: isApproved ? 'absent' : isPending ? 'pending_absence' : 'idle',
 			entry: null,
 			openBreak: null,
 			absence: todayAbsence
 				? {
 						type: todayAbsence.type as AbsenceType,
+						status: absenceStatus ?? 'pending',
+						requestGroupId: todayAbsence.requestGroupId,
 						note: todayAbsence.note,
 						date: todayAbsence.date
 					}
-				: null
+				: null,
+			forgottenClockOut: null
 		};
 	}
 
@@ -89,6 +104,8 @@ export async function getWorkerStatus(userId: string): Promise<WorkerStatus> {
 		roleName = r?.name ?? null;
 	}
 
+	const stale = getStaleShiftInfo(activeEntry.startTime, getStaleShiftConfig());
+
 	return {
 		state: openBreak ? 'on_break' : 'working',
 		entry: {
@@ -108,6 +125,7 @@ export async function getWorkerStatus(userId: string): Promise<WorkerStatus> {
 					elapsedSeconds: currentBreakSeconds
 				}
 			: null,
-		absence: null
+		absence: null,
+		forgottenClockOut: stale.isStale ? stale : null
 	};
 }

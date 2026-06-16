@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, inArray } from 'drizzle-orm';
 import { db } from '../../infrastructure/db/client';
 import { absence, project, projectMember, user } from '../../infrastructure/db/schema';
-import type { AbsenceType } from '../absence';
+import type { AbsenceStatus, AbsenceType } from '../absence';
 import { getReportProjects } from './reports';
 
 export type CrewAbsence = {
@@ -10,6 +10,8 @@ export type CrewAbsence = {
 	userEmail: string;
 	date: string;
 	type: AbsenceType;
+	status: AbsenceStatus;
+	requestGroupId: string;
 	note: string | null;
 };
 
@@ -35,8 +37,11 @@ export async function getAbsencesForUsers(params: {
 	userIds: string[];
 	from: string;
 	to: string;
+	statuses?: AbsenceStatus[];
 }): Promise<CrewAbsence[]> {
 	if (params.userIds.length === 0) return [];
+
+	const statuses = params.statuses ?? ['approved'];
 
 	const rows = await db
 		.select({
@@ -45,6 +50,8 @@ export async function getAbsencesForUsers(params: {
 			userEmail: user.email,
 			date: absence.date,
 			type: absence.type,
+			status: absence.status,
+			requestGroupId: absence.requestGroupId,
 			note: absence.note
 		})
 		.from(absence)
@@ -52,6 +59,7 @@ export async function getAbsencesForUsers(params: {
 		.where(
 			and(
 				inArray(absence.userId, params.userIds),
+				inArray(absence.status, statuses),
 				gte(absence.date, params.from),
 				lte(absence.date, params.to)
 			)
@@ -64,6 +72,8 @@ export async function getAbsencesForUsers(params: {
 		userEmail: row.userEmail,
 		date: row.date,
 		type: row.type as AbsenceType,
+		status: row.status as AbsenceStatus,
+		requestGroupId: row.requestGroupId,
 		note: row.note
 	}));
 }

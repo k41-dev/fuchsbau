@@ -36,7 +36,8 @@ function applyOne(
 					breakSeconds: 0
 				},
 				openBreak: null,
-				absence: null
+				absence: null,
+				forgottenClockOut: null
 			};
 		}
 
@@ -56,25 +57,53 @@ function applyOne(
 				openBreak: null
 			};
 
+		case 'switch-project': {
+			const projectId = payload.projectId as number;
+			const roleId = payload.roleId as number | undefined;
+			const project = findProject(projects, projectId);
+			const role = project?.roles.find((r) => r.id === roleId);
+
+			return {
+				state: 'working',
+				entry: {
+					id: -1,
+					projectId,
+					projectName: project?.name ?? 'Job site',
+					roleName: role?.name ?? null,
+					description: null,
+					startTime: at,
+					workSeconds: 0,
+					breakSeconds: 0
+				},
+				openBreak: null,
+				absence: null,
+				forgottenClockOut: null
+			};
+		}
+
 		case 'clock-out':
 			return {
 				state: 'idle',
 				entry: null,
 				openBreak: null,
-				absence: null
+				absence: null,
+				forgottenClockOut: null
 			};
 
 		case 'report-absence': {
 			const type = payload.type as AbsenceType;
 			return {
-				state: 'absent',
+				state: 'pending_absence',
 				entry: null,
 				openBreak: null,
 				absence: {
 					type,
+					status: 'pending',
+					requestGroupId: 'offline',
 					note: (payload.note as string | undefined) ?? null,
 					date: todayString()
-				}
+				},
+				forgottenClockOut: null
 			};
 		}
 
@@ -83,7 +112,8 @@ function applyOne(
 				state: 'idle',
 				entry: null,
 				openBreak: null,
-				absence: null
+				absence: null,
+				forgottenClockOut: null
 			};
 
 		default:
@@ -102,7 +132,8 @@ export function applyPendingActions(
 			state: 'idle',
 			entry: null,
 			openBreak: null,
-			absence: null
+			absence: null,
+			forgottenClockOut: null
 		} satisfies WorkerStatus);
 
 	for (const item of pending) {
@@ -125,7 +156,8 @@ export function applyAction(
 			state: 'idle',
 			entry: null,
 			openBreak: null,
-			absence: null
+			absence: null,
+			forgottenClockOut: null
 		} satisfies WorkerStatus);
 
 	return applyOne(base, action, payload, projects, clientTimestamp);

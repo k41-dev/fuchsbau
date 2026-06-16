@@ -4,12 +4,14 @@ export type CachedProject = {
 	id: number;
 	name: string;
 	address: string | null;
+	hasBackgroundImage?: boolean;
 	roles: { id: number; name: string }[];
 };
 
 export type WorkerActionName =
 	| 'clock-in'
 	| 'clock-out'
+	| 'switch-project'
 	| 'start-break'
 	| 'end-break'
 	| 'report-absence'

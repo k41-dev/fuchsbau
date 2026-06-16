@@ -27,6 +27,29 @@ describe('applyAction', () => {
 		expect(status.entry?.startTime).toBe('2026-06-16T07:00:00.000Z');
 	});
 
+	it('optimistically switches projects', () => {
+		let status = applyAction(
+			null,
+			'clock-in',
+			{ projectId: 1, roleId: 10 },
+			projects,
+			'2026-06-16T07:00:00.000Z'
+		);
+
+		status = applyAction(
+			status,
+			'switch-project',
+			{ projectId: 1, roleId: 10 },
+			projects,
+			'2026-06-16T12:00:00.000Z'
+		);
+
+		expect(status.state).toBe('working');
+		expect(status.entry?.projectName).toBe('Site A');
+		expect(status.entry?.startTime).toBe('2026-06-16T12:00:00.000Z');
+		expect(status.openBreak).toBeNull();
+	});
+
 	it('optimistically moves to break and back', () => {
 		let status = applyAction(
 			null,

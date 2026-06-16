@@ -1,8 +1,15 @@
 export const ABSENCE_TYPES = ['sick', 'vacation'] as const;
 export type AbsenceType = (typeof ABSENCE_TYPES)[number];
 
+export const ABSENCE_STATUSES = ['pending', 'approved', 'rejected'] as const;
+export type AbsenceStatus = (typeof ABSENCE_STATUSES)[number];
+
+export function toDateString(date: Date): string {
+	return date.toISOString().slice(0, 10);
+}
+
 export function todayString(): string {
-	return new Date().toISOString().slice(0, 10);
+	return toDateString(new Date());
 }
 
 export function eachDateInRange(start: string, end: string): string[] {

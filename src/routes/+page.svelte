@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import ProjectCover from '$lib/components/ProjectCover.svelte';
 	import type { PageData } from './$types';
 	import type { WorkerStatus } from '$lib/server/worker-status';
 	import type { AbsenceType } from '$lib/absence';
@@ -122,15 +123,17 @@
 				syncNotice = 'Saved offline — will sync when you are back online';
 			}
 
-			if (action === 'clock-in') {
+			if (action === 'clock-in' || action === 'switch-project') {
 				if (selectedProjectId && selectedRoleId) {
 					localStorage.setItem(
 						`fuchsbau:lastRole:${selectedProjectId}`,
 						String(selectedRoleId)
 					);
 				}
-				selectedProjectId = null;
-				selectedRoleId = null;
+				if (action === 'clock-in') {
+					selectedProjectId = null;
+					selectedRoleId = null;
+				}
 			}
 			if (action === 'clock-out' || action === 'report-absence') {
 				absenceFlow = 'closed';
@@ -165,7 +168,11 @@
 					? status.absence?.type === 'vacation'
 						? 'On vacation'
 						: 'Sick today'
-					: 'Off duty'
+					: status?.state === 'pending_absence'
+						? status.absence?.type === 'vacation'
+							? 'Vacation pending approval'
+							: 'Sick leave pending approval'
+						: 'Off duty'
 	);
 
 	const selectedProject = $derived(
@@ -202,7 +209,9 @@
 					? status.absence?.type === 'vacation'
 						? 'bg-violet-100 text-violet-800'
 						: 'bg-blue-100 text-blue-800'
-					: 'bg-muted text-muted-foreground'
+					: status?.state === 'pending_absence'
+						? 'bg-amber-100 text-amber-900'
+						: 'bg-muted text-muted-foreground'
 	);
 
 	function openAbsenceFlow(type: AbsenceType) {
@@ -247,6 +256,7 @@
 				id: p.id,
 				name: p.name,
 				address: p.address,
+				hasBackgroundImage: p.hasBackgroundImage,
 				roles: p.roles
 			}));
 
@@ -319,13 +329,10 @@
 			</div>
 		{:else if data.projects.length === 0}
 			<div class="flex flex-col items-center justify-center min-h-[60dvh] text-center">
-				<p class="text-muted-foreground mb-6">No job sites assigned yet.</p>
-				<a
-					href="/projects"
-					class="h-14 px-8 rounded-2xl bg-primary text-primary-foreground text-lg font-semibold flex items-center justify-center"
-				>
-					View job sites
-				</a>
+				<p class="text-muted-foreground mb-2">No job sites assigned yet.</p>
+				<p class="text-muted-foreground text-sm mb-6">
+					Ask your supervisor for an invite link to register and join a job site.
+				</p>
 			</div>
 		{:else}
 			{#if !isOnline}
@@ -349,12 +356,42 @@
 				</div>
 			{/if}
 
+			{#if projects.length > 1}
+				<div class="mb-4 flex justify-center">
+					<a
+						href="/my-sites"
+						class="text-sm font-medium text-primary hover:underline"
+					>
+						View all {projects.length} job sites →
+					</a>
+				</div>
+			{/if}
+
 			<!-- Status header -->
 			<div class="text-center mb-6">
 				<span class="inline-block px-4 py-1.5 rounded-full text-sm font-semibold {stateColor}">
 					{stateLabel}
 				</span>
 			</div>
+
+			{#if status?.forgottenClockOut}
+				<div class="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-5">
+					<h2 class="font-semibold text-amber-950 mb-1">Still clocked in?</h2>
+					<p class="text-sm text-amber-900 mb-4">
+						{status.forgottenClockOut.reason}. If you left
+						<strong>{status.entry?.projectName ?? 'the site'}</strong>, clock out now so your hours
+						stay correct.
+					</p>
+					<button
+						type="button"
+						onclick={() => workerAction('clock-out')}
+						disabled={isLoading}
+						class="h-12 w-full rounded-2xl bg-amber-600 text-white font-semibold disabled:opacity-50"
+					>
+						{isLoading ? 'Clocking out...' : 'Clock out now'}
+					</button>
+				</div>
+			{/if}
 
 			{#if error}
 				<div class="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
@@ -392,6 +429,14 @@
 				</div>
 			{:else if status?.state === 'working' || status?.state === 'on_break'}
 				<!-- Active shift -->
+				{#if projects.length > 1}
+					<a
+						href="/my-sites"
+						class="mb-4 flex items-center justify-center h-11 rounded-2xl border text-sm font-medium hover:bg-muted transition-colors"
+					>
+						Switch job site
+					</a>
+				{/if}
 				<div class="rounded-3xl border bg-card p-6 shadow-sm mb-6">
 					<div class="text-center mb-6">
 						<div class="text-sm text-muted-foreground mb-1">
@@ -423,6 +468,27 @@
 					</div>
 				</div>
 			{:else}
+				{#if status?.state === 'pending_absence'}
+					<div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 mb-6">
+						<h2 class="font-semibold mb-1">
+							{status.absence?.type === 'vacation'
+								? 'Vacation request awaiting approval'
+								: 'Sick leave awaiting approval'}
+						</h2>
+						<p class="text-sm text-muted-foreground mb-4">
+							Your supervisor must approve this before it counts. Clock in below to withdraw
+							today's request, or cancel it explicitly.
+						</p>
+						<button
+							onclick={() => workerAction('cancel-absence')}
+							disabled={isLoading}
+							class="h-11 px-5 rounded-xl border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
+						>
+							{isLoading ? 'Updating...' : 'Withdraw request'}
+						</button>
+					</div>
+				{/if}
+
 				<!-- Clock in: pick job site -->
 				<div class="mb-4">
 					<h2 class="text-lg font-semibold mb-3">Select job site</h2>
@@ -431,15 +497,29 @@
 							<button
 								type="button"
 								onclick={() => selectProject(proj.id)}
-								class="w-full text-left rounded-2xl border p-5 transition-all active:scale-[0.98] {selectedProjectId ===
+								class="w-full text-left rounded-2xl border overflow-hidden transition-all active:scale-[0.98] {selectedProjectId ===
 								proj.id
-									? 'border-primary bg-primary/5 ring-2 ring-primary'
-									: 'bg-card hover:border-primary/30'}"
+									? 'border-primary ring-2 ring-primary'
+									: 'hover:border-primary/30'}"
 							>
-								<div class="font-semibold text-lg">{proj.name}</div>
-								{#if proj.address}
-									<div class="text-sm text-muted-foreground mt-0.5">{proj.address}</div>
-								{/if}
+								<ProjectCover
+									projectId={proj.id}
+									hasBackgroundImage={proj.hasBackgroundImage}
+									class="min-h-[120px] flex flex-col justify-end"
+								>
+									<div class="p-5">
+										<div class="font-semibold text-lg">{proj.name}</div>
+										{#if proj.address}
+											<div
+												class="text-sm mt-0.5 {proj.hasBackgroundImage
+													? 'text-white/80'
+													: 'text-muted-foreground'}"
+											>
+												{proj.address}
+											</div>
+										{/if}
+									</div>
+								</ProjectCover>
 							</button>
 						{/each}
 					</div>
@@ -465,7 +545,7 @@
 					</div>
 				{/if}
 
-				{#if absenceFlow === 'closed'}
+				{#if absenceFlow === 'closed' && status?.state !== 'pending_absence'}
 					<button
 						type="button"
 						onclick={() => (absenceFlow = 'pick')}
@@ -502,7 +582,7 @@
 					</div>
 				{:else if absenceFlow === 'sick'}
 					<div class="rounded-2xl border bg-card p-5 mb-4">
-						<p class="text-sm mb-4">Report sick for today?</p>
+						<p class="text-sm mb-4">Report sick for today? Your supervisor must approve it.</p>
 						<input
 							type="text"
 							bind:value={absenceNote}
@@ -527,7 +607,9 @@
 					</div>
 				{:else if absenceFlow === 'vacation'}
 					<div class="rounded-2xl border bg-card p-5 mb-4">
-						<p class="text-sm mb-4">Book vacation (single or multiple days)</p>
+						<p class="text-sm mb-4">
+							Request vacation (single or multiple days). Your supervisor must approve it.
+						</p>
 						<div class="grid grid-cols-2 gap-3 mb-4">
 							<label class="text-sm">
 								<span class="text-muted-foreground block mb-1">From</span>
@@ -559,7 +641,7 @@
 								disabled={isLoading || !vacationStart || !vacationEnd}
 								class="flex-1 h-12 rounded-xl bg-violet-600 text-white font-medium disabled:opacity-60"
 							>
-								Book vacation
+								Request vacation
 							</button>
 							<button
 								onclick={() => (absenceFlow = 'pick')}
@@ -580,7 +662,7 @@
 			class="fixed bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur-md px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
 		>
 			<div class="max-w-lg mx-auto flex flex-col gap-3">
-				{#if status?.state === 'idle'}
+				{#if status?.state === 'idle' || status?.state === 'pending_absence'}
 					<button
 						onclick={() =>
 							workerAction('clock-in', {

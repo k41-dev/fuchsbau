@@ -1,7 +1,7 @@
 import { eq, and, gte, lt, or, inArray } from 'drizzle-orm';
 import { db } from '../../infrastructure/db/client';
 import { timeEntry, project, projectMember, user, role } from '../../infrastructure/db/schema';
-import type { AbsenceType } from '../absence';
+import { toDateString, type AbsenceType } from '../absence';
 import { getNetWorkSeconds } from './time-utils';
 import {
 	getAbsencesForUsers,
@@ -46,10 +46,6 @@ export type ReportProject = {
 	name: string;
 	isOwner: boolean;
 };
-
-function toDateString(date: Date): string {
-	return date.toISOString().slice(0, 10);
-}
 
 export function getDefaultDateRange(): { from: string; to: string } {
 	const now = new Date();
@@ -248,58 +244,6 @@ export async function getAbsenceReport(params: {
 		summaries: summarizeAbsences(absences),
 		isOwnerView: scope.isOwnerView
 	};
-}
-
-export function entriesToCsv(entries: ReportEntry[], absences: ReportAbsence[] = []): string {
-	const headers = [
-		'Record Type',
-		'Worker',
-		'Email',
-		'Job Site',
-		'Role',
-		'Date',
-		'Start',
-		'End',
-		'Hours',
-		'Note'
-	];
-	const lines = [headers.join(',')];
-
-	for (const e of entries) {
-		const row = [
-			'work',
-			e.userName ?? '',
-			e.userEmail,
-			e.projectName,
-			e.roleName ?? '',
-			e.date,
-			e.startTime.toISOString(),
-			e.endTime?.toISOString() ?? (e.isRunning ? 'Running' : ''),
-			String(e.hours),
-			e.description ?? ''
-		].map((cell) => `"${String(cell).replace(/"/g, '""')}"`);
-
-		lines.push(row.join(','));
-	}
-
-	for (const a of absences) {
-		const row = [
-			a.type,
-			a.userName ?? '',
-			a.userEmail,
-			'',
-			'',
-			a.date,
-			'',
-			'',
-			'',
-			a.note ?? ''
-		].map((cell) => `"${String(cell).replace(/"/g, '""')}"`);
-
-		lines.push(row.join(','));
-	}
-
-	return lines.join('\n');
 }
 
 export function absenceTypeLabel(type: AbsenceType): string {

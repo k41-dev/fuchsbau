@@ -24,6 +24,7 @@ Thumbs.db
 
 # Local / scratch
 cookies.txt
+uploads/
 
 # Vite
 vite.config.js.timestamp-*

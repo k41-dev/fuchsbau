@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ProjectCover from '$lib/components/ProjectCover.svelte';
 	import type { PageData, ActionData } from './$types';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -33,7 +34,13 @@
 	}
 
 	function handleFormResult() {
-		if (form?.success) window.location.reload();
+		if (!form?.success) return;
+		if (form.inviteCreated || form.memberAdded || form.inviteRevoked) return;
+		window.location.reload();
+	}
+
+	async function copyInviteLink(url: string) {
+		await navigator.clipboard.writeText(url);
 	}
 
 	$effect(() => {
@@ -58,38 +65,108 @@
 </script>
 
 <div class="max-w-5xl mx-auto px-6 py-8">
-	<!-- Header -->
-	<div class="flex items-center justify-between mb-6 gap-4">
-		<div>
-			<a href="/projects" class="text-sm text-muted-foreground hover:text-foreground">← All job sites</a>
-			<h1 class="text-4xl font-semibold tracking-tighter mt-1">{data.project.name}</h1>
-			{#if data.project.address}
-				<p class="text-muted-foreground mt-1">{data.project.address}</p>
-			{/if}
-			{#if data.isOwner}
-				<p class="text-xs text-muted-foreground mt-2">Site supervisor view</p>
+	<ProjectCover
+		projectId={data.project.id}
+		hasBackgroundImage={data.project.hasBackgroundImage}
+		overlay="hero"
+		class="rounded-3xl border mb-6 min-h-[220px] flex flex-col justify-end"
+	>
+		<div class="p-6 sm:p-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+			<div>
+				<a
+					href="/projects"
+					class="text-sm hover:underline {data.project.hasBackgroundImage
+						? 'text-white/80 hover:text-white'
+						: 'text-muted-foreground hover:text-foreground'}"
+				>
+					← All job sites
+				</a>
+				<h1 class="text-4xl font-semibold tracking-tighter mt-1">{data.project.name}</h1>
+				{#if data.project.address}
+					<p class="mt-1 {data.project.hasBackgroundImage ? 'text-white/85' : 'text-muted-foreground'}">
+						{data.project.address}
+					</p>
+				{/if}
+				{#if data.isOwner}
+					<p
+						class="text-xs mt-2 {data.project.hasBackgroundImage
+							? 'text-white/70'
+							: 'text-muted-foreground'}"
+					>
+						Site supervisor view
+					</p>
+				{/if}
+			</div>
+
+			{#if data.myActiveEntry}
+				<div class="flex items-center gap-4 shrink-0">
+					<div class="text-right">
+						<div
+							class="text-xs {data.project.hasBackgroundImage
+								? 'text-white/75'
+								: 'text-muted-foreground'}"
+						>
+							You are tracking
+						</div>
+						<div
+							class="font-mono text-2xl font-semibold tracking-tighter {data.project.hasBackgroundImage
+								? 'text-emerald-200'
+								: 'text-emerald-600'}"
+						>
+							{getElapsed(data.myActiveEntry.id)}
+						</div>
+					</div>
+					<form method="POST" action="?/clockOut">
+						<button
+							type="submit"
+							class="h-11 px-6 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
+						>
+							Clock Out
+						</button>
+					</form>
+				</div>
 			{/if}
 		</div>
+	</ProjectCover>
 
-		{#if data.myActiveEntry}
-			<div class="flex items-center gap-4 shrink-0">
-				<div class="text-right">
-					<div class="text-xs text-muted-foreground">You are tracking</div>
-					<div class="font-mono text-2xl font-semibold tracking-tighter text-emerald-600">
-						{getElapsed(data.myActiveEntry.id)}
-					</div>
+	{#if data.canManage}
+		<div class="rounded-2xl border bg-card p-5 mb-6">
+			<h2 class="font-semibold text-sm mb-3">Cover photo</h2>
+			{#if form?.backgroundUpdated}
+				<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 mb-3">
+					Cover photo updated.
 				</div>
-				<form method="POST" action="?/clockOut">
-					<button
-						type="submit"
-						class="h-11 px-6 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
-					>
-						Clock Out
+			{:else if form?.backgroundRemoved}
+				<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 mb-3">
+					Cover photo removed.
+				</div>
+			{:else if form?.error}
+				<div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 mb-3">
+					{form.error}
+				</div>
+			{/if}
+			<div class="flex flex-col sm:flex-row gap-3 items-start">
+				<form method="POST" action="?/updateBackground" enctype="multipart/form-data" class="flex-1 w-full">
+					<input
+						type="file"
+						name="background"
+						accept="image/jpeg,image/png,image/webp"
+						class="w-full rounded-xl border bg-background px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+					/>
+					<button type="submit" class="mt-3 h-10 px-4 rounded-xl border text-sm font-medium">
+						Upload new photo
 					</button>
 				</form>
+				{#if data.project.hasBackgroundImage}
+					<form method="POST" action="?/removeBackground">
+						<button type="submit" class="h-10 px-4 rounded-xl border text-sm font-medium text-red-600">
+							Remove photo
+						</button>
+					</form>
+				{/if}
 			</div>
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	{#if data.canManage}
 		<!-- Date filter (supervisor) -->
@@ -129,7 +206,19 @@
 								<span class="font-medium text-amber-900">{stale.userName || stale.userEmail}</span>
 								<span class="text-amber-700 ml-2">{stale.staleReason}</span>
 							</div>
-							<form method="POST" action="?/forceClockOut">
+							<form
+								method="POST"
+								action="?/forceClockOut"
+								onsubmit={(e) => {
+									if (
+										!confirm(
+											`Clock out ${stale.userName || stale.userEmail}? Their shift will end now.`
+										)
+									) {
+										e.preventDefault();
+									}
+								}}
+							>
 								<input type="hidden" name="userId" value={stale.userId} />
 								<button type="submit" class="text-xs font-medium text-amber-900 hover:underline">
 									Clock out for them
@@ -180,10 +269,65 @@
 		{/if}
 	</div>
 
+	{#if data.canManage && data.pendingAbsenceRequests.length > 0}
+		<div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 mb-8">
+			<h2 class="font-semibold text-lg tracking-tight mb-1">Pending absence requests</h2>
+			<p class="text-sm text-muted-foreground mb-4">
+				Approve or reject before they count in reports and block clock-in.
+			</p>
+			<div class="space-y-3">
+				{#each data.pendingAbsenceRequests as request}
+					<div class="rounded-xl border bg-card px-4 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+						<div class="min-w-0 flex-1">
+							<div class="font-medium">{request.userName || request.userEmail}</div>
+							<div class="text-sm text-muted-foreground mt-0.5">
+								{request.type === 'vacation' ? 'Vacation' : 'Sick'}
+								·
+								{request.startDate === request.endDate
+									? formatDateLabel(request.startDate)
+									: `${formatDateLabel(request.startDate)} – ${formatDateLabel(request.endDate)}`}
+								· {request.dayCount} day{request.dayCount === 1 ? '' : 's'}
+							</div>
+							{#if request.note}
+								<div class="text-sm text-muted-foreground mt-1">{request.note}</div>
+							{/if}
+						</div>
+						<div class="flex flex-col sm:flex-row gap-2 shrink-0">
+							<form method="POST" action="?/approveAbsence">
+								<input type="hidden" name="requestGroupId" value={request.requestGroupId} />
+								<button
+									type="submit"
+									class="h-10 px-4 rounded-xl bg-emerald-600 text-white text-sm font-medium w-full sm:w-auto"
+								>
+									Approve
+								</button>
+							</form>
+							<form method="POST" action="?/rejectAbsence" class="flex gap-2 items-center">
+								<input type="hidden" name="requestGroupId" value={request.requestGroupId} />
+								<input
+									type="text"
+									name="reviewNote"
+									placeholder="Optional note"
+									class="h-10 rounded-xl border bg-background px-3 text-sm w-full sm:w-40"
+								/>
+								<button
+									type="submit"
+									class="h-10 px-4 rounded-xl border text-sm font-medium shrink-0"
+								>
+									Reject
+								</button>
+							</form>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	{#if data.canManage && data.daySummary.absences.length > 0}
 		<div class="rounded-2xl border bg-card p-5 mb-8">
 			<h2 class="font-semibold text-lg tracking-tight mb-4">
-				Away · {formatDateLabel(data.selectedDate)}
+				Approved away · {formatDateLabel(data.selectedDate)}
 			</h2>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 				{#each data.daySummary.absences as absent}
@@ -248,7 +392,19 @@
 									<div class="text-[10px] text-muted-foreground">ELAPSED</div>
 								</div>
 								{#if data.canManage && worker.isStale}
-									<form method="POST" action="?/forceClockOut">
+									<form
+										method="POST"
+										action="?/forceClockOut"
+										onsubmit={(e) => {
+											if (
+												!confirm(
+													`Clock out ${worker.userName || worker.userEmail}? Their shift will end now.`
+												)
+											) {
+												e.preventDefault();
+											}
+										}}
+									>
 										<input type="hidden" name="userId" value={worker.userId} />
 										<button
 											type="submit"
@@ -334,11 +490,45 @@
 		</div>
 
 		{#if data.canManage}
-			<form method="POST" action="?/addMember" class="flex flex-col sm:flex-row gap-2 mb-4">
+			{#if form?.inviteCreated && form.inviteUrl}
+				<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 mb-4 text-sm text-emerald-900">
+					<p class="font-medium mb-2">
+						{form.resentInvite ? 'Invite link for' : 'Invite created for'}
+						{form.email}
+					</p>
+					<p class="mb-3 text-emerald-800">
+						Share this link so they can register and join your crew automatically.
+					</p>
+					<div class="flex flex-col sm:flex-row gap-2">
+						<input
+							readonly
+							value={form.inviteUrl}
+							class="flex-1 h-10 rounded-xl border bg-white px-3 text-sm font-mono"
+						/>
+						<button
+							type="button"
+							onclick={() => copyInviteLink(form.inviteUrl!)}
+							class="h-10 px-4 rounded-xl border bg-white text-sm font-medium shrink-0"
+						>
+							Copy link
+						</button>
+					</div>
+				</div>
+			{:else if form?.memberAdded}
+				<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 mb-4 text-sm text-emerald-900">
+					{form.email} was added to the crew.
+				</div>
+			{:else if form?.error}
+				<div class="rounded-2xl border border-red-200 bg-red-50 p-4 mb-4 text-sm text-red-600">
+					{form.error}
+				</div>
+			{/if}
+
+			<form method="POST" action="?/inviteMember" class="flex flex-col sm:flex-row gap-2 mb-4">
 				<input
 					type="email"
 					name="email"
-					placeholder="Add crew member by email"
+					placeholder="Invite worker by email"
 					required
 					class="flex-1 h-10 rounded-xl border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				/>
@@ -346,9 +536,42 @@
 					type="submit"
 					class="h-10 px-4 rounded-xl border text-sm font-medium hover:bg-muted transition-colors shrink-0"
 				>
-					+ Add to crew
+					Invite to crew
 				</button>
 			</form>
+
+			{#if data.pendingInvites.length > 0}
+				<div class="rounded-2xl border bg-card p-4 mb-4">
+					<h3 class="font-medium text-sm mb-3">Pending invites</h3>
+					<div class="space-y-3">
+						{#each data.pendingInvites as invite}
+							<div class="flex flex-col sm:flex-row sm:items-center gap-3">
+								<div class="min-w-0 flex-1">
+									<div class="font-medium text-sm">{invite.email}</div>
+									<div class="text-xs text-muted-foreground">
+										Expires {new Date(invite.expiresAt).toLocaleDateString()}
+									</div>
+								</div>
+								<div class="flex gap-2 shrink-0">
+									<button
+										type="button"
+										onclick={() => copyInviteLink(`${window.location.origin}${invite.invitePath}`)}
+										class="h-9 px-3 rounded-xl border text-xs font-medium"
+									>
+										Copy link
+									</button>
+									<form method="POST" action="?/revokeInvite">
+										<input type="hidden" name="inviteId" value={invite.id} />
+										<button type="submit" class="h-9 px-3 rounded-xl border text-xs font-medium">
+											Revoke
+										</button>
+									</form>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		{/if}
 
 		<div class="rounded-2xl border bg-card divide-y">

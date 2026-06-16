@@ -5,6 +5,7 @@ export class Project {
 		public readonly description: string | null,
 		public readonly address: string | null,
 		public readonly color: string | null,
+		public readonly hasBackgroundImage: boolean,
 		public readonly userId: string,
 		public readonly createdAt: Date,
 		public readonly updatedAt: Date
@@ -17,6 +18,7 @@ export class Project {
 			description: this.description,
 			address: this.address,
 			color: this.color,
+			hasBackgroundImage: this.hasBackgroundImage,
 			userId: this.userId,
 			createdAt: this.createdAt,
 			updatedAt: this.updatedAt
@@ -37,6 +39,7 @@ export class Project {
 			params.description?.trim() || null,
 			params.address?.trim() || null,
 			params.color ?? '#3b82f6',
+			false,
 			params.userId,
 			now,
 			now

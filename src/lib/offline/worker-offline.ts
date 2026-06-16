@@ -1,6 +1,7 @@
 import type { WorkerStatus } from '$lib/server/worker-status';
 import { getOfflineDb } from './db';
 import { applyAction, applyPendingActions } from './optimistic-status';
+import { toPlainData } from './serialize';
 import type {
 	CachedProject,
 	PendingWorkerAction,
@@ -22,7 +23,7 @@ export function isNetworkError(error: unknown): boolean {
 export async function saveWorkerCache(record: WorkerCacheRecord) {
 	const db = getOfflineDb();
 	if (!db) return;
-	await db.workerCache.put(record);
+	await db.workerCache.put(toPlainData(record));
 }
 
 export async function loadWorkerCache(userId: string): Promise<WorkerCacheRecord | null> {
@@ -51,13 +52,13 @@ export async function enqueueAction(
 	const item: PendingWorkerAction = {
 		id: createActionId(),
 		action,
-		payload,
+		payload: toPlainData(payload),
 		clientTimestamp,
 		createdAt: Date.now()
 	};
 	const db = getOfflineDb();
 	if (!db) throw new Error('Offline storage is unavailable');
-	await db.pendingActions.add(item);
+	await db.pendingActions.add(toPlainData(item));
 	return item;
 }
 

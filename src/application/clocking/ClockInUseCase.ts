@@ -15,15 +15,31 @@ export class ClockInUseCase {
     startTime?: Date;
   }): Promise<TimeEntry> {
     const today = new Date().toISOString().slice(0, 10);
-    const [todayAbsence] = await db
+    const [approvedAbsence] = await db
       .select()
       .from(absence)
-      .where(and(eq(absence.userId, params.userId), eq(absence.date, today)))
+      .where(
+        and(
+          eq(absence.userId, params.userId),
+          eq(absence.date, today),
+          eq(absence.status, 'approved')
+        )
+      )
       .limit(1);
 
-    if (todayAbsence) {
-      throw new Error('You have an absence today. Cancel it first if you are working.');
+    if (approvedAbsence) {
+      throw new Error('You have an approved absence today. Cancel it first if you are working.');
     }
+
+    await db
+      .delete(absence)
+      .where(
+        and(
+          eq(absence.userId, params.userId),
+          eq(absence.date, today),
+          eq(absence.status, 'pending')
+        )
+      );
 
     const activeEntry = await this.timeEntryRepository.findActiveByUserId(params.userId);
     if (activeEntry) {

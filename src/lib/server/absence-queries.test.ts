@@ -10,6 +10,8 @@ describe('summarizeAbsences', () => {
 				userEmail: 'alex@test',
 				date: '2026-06-16',
 				type: 'sick',
+				status: 'approved',
+				requestGroupId: 'g1',
 				note: null
 			},
 			{
@@ -18,6 +20,8 @@ describe('summarizeAbsences', () => {
 				userEmail: 'alex@test',
 				date: '2026-06-17',
 				type: 'vacation',
+				status: 'approved',
+				requestGroupId: 'g2',
 				note: null
 			},
 			{
@@ -26,6 +30,8 @@ describe('summarizeAbsences', () => {
 				userEmail: 'bea@test',
 				date: '2026-06-16',
 				type: 'vacation',
+				status: 'approved',
+				requestGroupId: 'g3',
 				note: null
 			}
 		];

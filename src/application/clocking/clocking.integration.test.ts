@@ -32,17 +32,17 @@ describeIfDb('clocking use cases', () => {
 		await deleteTestUsers([userId]);
 	});
 
-	it('blocks clock-in when user has an absence today', async () => {
+	it('creates pending sick leave that does not block clock-in until approved', async () => {
 		await deleteTimeEntriesForUser(userId);
 		await deleteAbsencesForUser(userId);
 
-		await reportAbsenceUseCase.execute({ userId, type: 'sick' });
+		const rows = await reportAbsenceUseCase.execute({ userId, type: 'sick' });
+		expect(rows[0].status).toBe('pending');
 
-		await expect(clockInUseCase.execute({ userId, projectId: null })).rejects.toThrow(
-			'You have an absence today'
-		);
+		await expect(clockInUseCase.execute({ userId, projectId: null })).resolves.toBeTruthy();
 
-		await cancelAbsenceUseCase.execute(userId);
+		await deleteTimeEntriesForUser(userId);
+		await deleteAbsencesForUser(userId);
 	});
 
 	it('books multi-day vacation and rejects overlapping days', async () => {
@@ -58,6 +58,7 @@ describeIfDb('clocking use cases', () => {
 
 		expect(rows).toHaveLength(1);
 		expect(rows[0].type).toBe('vacation');
+		expect(rows[0].status).toBe('pending');
 
 		await expect(
 			reportAbsenceUseCase.execute({

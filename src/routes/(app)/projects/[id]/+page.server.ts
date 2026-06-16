@@ -7,25 +7,40 @@ import { ClockOutUseCase } from '../../../../application/clocking/ClockOutUseCas
 import { DrizzleTimeEntryRepository } from '../../../../infrastructure/repositories/DrizzleTimeEntryRepository';
 import { DrizzleRoleRepository } from '../../../../domain/repositories/DrizzleRoleRepository';
 import { Role } from '../../../../domain/entities/Role';
-import { requireUser } from '$lib/server/require-auth';
+import { requireSupervisor } from '$lib/server/account-role';
 import { getProjectAccess } from '$lib/server/project-access';
-import { AddProjectMemberUseCase } from '../../../../application/projects/AddProjectMemberUseCase';
+import { InviteProjectMemberUseCase } from '../../../../application/projects/InviteProjectMemberUseCase';
 import { RemoveProjectMemberUseCase } from '../../../../application/projects/RemoveProjectMemberUseCase';
-import { getActiveWorkers, getDaySummary, getTodayString } from '$lib/server/supervisor';
+import { RevokeWorkerInviteUseCase } from '../../../../application/projects/RevokeWorkerInviteUseCase';
+import {
+	attachProjectBackgroundImage,
+	getBackgroundFileFromForm,
+	removeProjectBackgroundImage
+} from '$lib/server/project-images';
+import { getPendingInvitesForProject } from '$lib/server/worker-invites';
+import { ApproveAbsenceUseCase } from '../../../../application/clocking/ApproveAbsenceUseCase';
+import { RejectAbsenceUseCase } from '../../../../application/clocking/RejectAbsenceUseCase';
+import { getPendingAbsenceRequestsForProject } from '$lib/server/absence-review';
+import { getActiveWorkers, getDaySummary } from '$lib/server/supervisor';
+import { todayString } from '$lib/absence';
+
+const approveAbsenceUseCase = new ApproveAbsenceUseCase();
+const rejectAbsenceUseCase = new RejectAbsenceUseCase();
 
 const timeEntryRepo = new DrizzleTimeEntryRepository();
 const clockInUseCase = new ClockInUseCase(timeEntryRepo);
 const clockOutUseCase = new ClockOutUseCase(timeEntryRepo);
 const roleRepo = new DrizzleRoleRepository();
-const addMemberUseCase = new AddProjectMemberUseCase();
+const inviteMemberUseCase = new InviteProjectMemberUseCase();
 const removeMemberUseCase = new RemoveProjectMemberUseCase();
+const revokeInviteUseCase = new RevokeWorkerInviteUseCase();
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
-	const currentUser = requireUser(locals);
+	const currentUser = requireSupervisor(locals);
 	const projectId = parseInt(params.id);
 	const access = await getProjectAccess(projectId, currentUser);
 
-	const selectedDate = url.searchParams.get('date') ?? getTodayString();
+	const selectedDate = url.searchParams.get('date') ?? todayString();
 	const roles = (await roleRepo.findByProjectId(projectId)).map((r) => r.toRecord());
 
 	const activeWorkers = await getActiveWorkers(projectId);
@@ -45,6 +60,10 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		.orderBy(user.name);
 
 	const myActive = activeWorkers.find((w) => w.userId === currentUser.id);
+	const pendingAbsenceRequests = access.canManage
+		? await getPendingAbsenceRequestsForProject(projectId)
+		: [];
+	const pendingInvites = access.canManage ? await getPendingInvitesForProject(projectId) : [];
 
 	return {
 		project: access.project,
@@ -80,13 +99,22 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		canClockIn: access.canClockIn,
 		myActiveEntry: myActive
 			? { id: myActive.entryId, startTime: myActive.startTime.toISOString() }
-			: null
+			: null,
+		pendingAbsenceRequests: pendingAbsenceRequests.map((request) => ({
+			...request,
+			submittedAt: request.submittedAt.toISOString()
+		})),
+		pendingInvites: pendingInvites.map((invite) => ({
+			...invite,
+			expiresAt: invite.expiresAt.toISOString(),
+			createdAt: invite.createdAt.toISOString()
+		}))
 	};
 };
 
 export const actions: Actions = {
 	takeOverRole: async ({ request, params, locals }) => {
-		const currentUser = requireUser(locals);
+		const currentUser = requireSupervisor(locals);
 		const projectId = parseInt(params.id);
 		await getProjectAccess(projectId, currentUser);
 
@@ -108,7 +136,7 @@ export const actions: Actions = {
 	},
 
 	addRole: async ({ request, params, locals }) => {
-		const currentUser = requireUser(locals);
+		const currentUser = requireSupervisor(locals);
 		const projectId = parseInt(params.id);
 		const access = await getProjectAccess(projectId, currentUser);
 
@@ -131,27 +159,63 @@ export const actions: Actions = {
 		}
 	},
 
-	addMember: async ({ request, params, locals }) => {
-		const currentUser = requireUser(locals);
+	inviteMember: async ({ request, params, locals, url }) => {
+		const currentUser = requireSupervisor(locals);
 		const projectId = parseInt(params.id);
 		const formData = await request.formData();
 		const email = (formData.get('email') as string) || '';
 
 		try {
-			await addMemberUseCase.execute({
+			const result = await inviteMemberUseCase.execute({
 				projectId,
 				email,
+				requesterId: currentUser.id,
+				origin: url.origin
+			});
+
+			if (result.type === 'added') {
+				return { success: true, memberAdded: true, email: result.email };
+			}
+
+			return {
+				success: true,
+				inviteCreated: true,
+				email: result.email,
+				inviteUrl: result.inviteUrl,
+				resentInvite: result.type === 'existing_invite'
+			};
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : 'Failed to invite crew member';
+			return { success: false, error: message };
+		}
+	},
+
+	revokeInvite: async ({ request, params, locals }) => {
+		const currentUser = requireSupervisor(locals);
+		const projectId = parseInt(params.id);
+		await getProjectAccess(projectId, currentUser);
+
+		const formData = await request.formData();
+		const inviteId = Number.parseInt(formData.get('inviteId') as string, 10);
+
+		if (!inviteId || Number.isNaN(inviteId)) {
+			return { success: false, error: 'Invalid invite' };
+		}
+
+		try {
+			await revokeInviteUseCase.execute({
+				inviteId,
 				requesterId: currentUser.id
 			});
-			return { success: true };
+			return { success: true, inviteRevoked: true };
 		} catch (e: unknown) {
-			const message = e instanceof Error ? e.message : 'Failed to add crew member';
+			const message = e instanceof Error ? e.message : 'Failed to revoke invite';
 			return { success: false, error: message };
 		}
 	},
 
 	removeMember: async ({ request, params, locals }) => {
-		const currentUser = requireUser(locals);
+		const currentUser = requireSupervisor(locals);
 		const projectId = parseInt(params.id);
 		const formData = await request.formData();
 		const memberUserId = formData.get('memberUserId') as string;
@@ -170,7 +234,7 @@ export const actions: Actions = {
 	},
 
 	clockOut: async ({ params, locals }) => {
-		const currentUser = requireUser(locals);
+		const currentUser = requireSupervisor(locals);
 		await getProjectAccess(parseInt(params.id), currentUser);
 
 		try {
@@ -182,8 +246,109 @@ export const actions: Actions = {
 		}
 	},
 
+	approveAbsence: async ({ request, params, locals }) => {
+		const currentUser = requireSupervisor(locals);
+		const projectId = parseInt(params.id);
+		const access = await getProjectAccess(projectId, currentUser);
+
+		if (!access.canManage) {
+			return { success: false, error: 'Only the project owner can approve absences' };
+		}
+
+		const formData = await request.formData();
+		const requestGroupId = (formData.get('requestGroupId') as string) || '';
+
+		if (!requestGroupId) {
+			return { success: false, error: 'Invalid absence request' };
+		}
+
+		try {
+			const count = await approveAbsenceUseCase.execute({
+				requestGroupId,
+				reviewedByUserId: currentUser.id
+			});
+			return { success: true, absenceReviewed: true, reviewedCount: count };
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : 'Failed to approve absence';
+			return { success: false, error: message };
+		}
+	},
+
+	rejectAbsence: async ({ request, params, locals }) => {
+		const currentUser = requireSupervisor(locals);
+		const projectId = parseInt(params.id);
+		const access = await getProjectAccess(projectId, currentUser);
+
+		if (!access.canManage) {
+			return { success: false, error: 'Only the project owner can reject absences' };
+		}
+
+		const formData = await request.formData();
+		const requestGroupId = (formData.get('requestGroupId') as string) || '';
+		const reviewNote = (formData.get('reviewNote') as string) || '';
+
+		if (!requestGroupId) {
+			return { success: false, error: 'Invalid absence request' };
+		}
+
+		try {
+			const count = await rejectAbsenceUseCase.execute({
+				requestGroupId,
+				reviewedByUserId: currentUser.id,
+				reviewNote
+			});
+			return { success: true, absenceReviewed: true, reviewedCount: count };
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : 'Failed to reject absence';
+			return { success: false, error: message };
+		}
+	},
+
+	updateBackground: async ({ request, params, locals }) => {
+		const currentUser = requireSupervisor(locals);
+		const projectId = parseInt(params.id);
+		const access = await getProjectAccess(projectId, currentUser);
+
+		if (!access.canManage) {
+			return { success: false, error: 'Only the project owner can change the cover image' };
+		}
+
+		const formData = await request.formData();
+		const background = getBackgroundFileFromForm(formData);
+
+		if (!background) {
+			return { success: false, error: 'Choose an image to upload' };
+		}
+
+		try {
+			await attachProjectBackgroundImage(projectId, background);
+			return { success: true, backgroundUpdated: true };
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : 'Failed to update cover image';
+			return { success: false, error: message };
+		}
+	},
+
+	removeBackground: async ({ params, locals }) => {
+		const currentUser = requireSupervisor(locals);
+		const projectId = parseInt(params.id);
+		const access = await getProjectAccess(projectId, currentUser);
+
+		if (!access.canManage) {
+			return { success: false, error: 'Only the project owner can remove the cover image' };
+		}
+
+		try {
+			await removeProjectBackgroundImage(projectId);
+			return { success: true, backgroundRemoved: true };
+		} catch (e: unknown) {
+			const message = e instanceof Error ? e.message : 'Failed to remove cover image';
+			return { success: false, error: message };
+		}
+	},
+
 	forceClockOut: async ({ request, params, locals }) => {
-		const currentUser = requireUser(locals);
+		const currentUser = requireSupervisor(locals);
 		const projectId = parseInt(params.id);
 		const access = await getProjectAccess(projectId, currentUser);
 

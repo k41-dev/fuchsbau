@@ -47,11 +47,19 @@ export class ReportAbsenceUseCase {
 		const existing = await db
 			.select({ date: absence.date })
 			.from(absence)
-			.where(and(eq(absence.userId, params.userId), inArray(absence.date, dates)));
+			.where(
+				and(
+					eq(absence.userId, params.userId),
+					inArray(absence.date, dates),
+					inArray(absence.status, ['pending', 'approved'])
+				)
+			);
 
 		if (existing.length > 0) {
 			throw new Error(`You already have an absence on ${existing[0].date}`);
 		}
+
+		const requestGroupId = crypto.randomUUID();
 
 		const rows = await db
 			.insert(absence)
@@ -60,6 +68,8 @@ export class ReportAbsenceUseCase {
 					userId: params.userId,
 					date,
 					type: params.type,
+					status: 'pending' as const,
+					requestGroupId,
 					note: params.note ?? null
 				}))
 			)

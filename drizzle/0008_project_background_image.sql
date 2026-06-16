@@ -1,0 +1,1 @@
+ALTER TABLE "project" ADD COLUMN "background_image_path" text;

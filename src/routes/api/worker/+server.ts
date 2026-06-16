@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import type { User } from 'better-auth';
+import type { AppUser } from '$lib/auth-user';
 import { auth } from '$lib/server/auth';
 import { getProjectAccess } from '$lib/server/project-access';
 import { getWorkerStatus } from '$lib/server/worker-status';
@@ -8,6 +8,7 @@ import { DrizzleTimeEntryRepository } from '../../../infrastructure/repositories
 import { DrizzleBreakRepository } from '../../../infrastructure/repositories/DrizzleBreakRepository';
 import { DrizzleRoleRepository } from '../../../domain/repositories/DrizzleRoleRepository';
 import { ClockInUseCase } from '../../../application/clocking/ClockInUseCase';
+import { SwitchProjectUseCase } from '../../../application/clocking/SwitchProjectUseCase';
 import { ClockOutUseCase } from '../../../application/clocking/ClockOutUseCase';
 import { StartBreakUseCase } from '../../../application/clocking/StartBreakUseCase';
 import { EndBreakUseCase } from '../../../application/clocking/EndBreakUseCase';
@@ -20,6 +21,7 @@ const timeEntryRepo = new DrizzleTimeEntryRepository();
 const breakRepo = new DrizzleBreakRepository();
 const roleRepo = new DrizzleRoleRepository();
 const clockInUseCase = new ClockInUseCase(timeEntryRepo);
+const switchProjectUseCase = new SwitchProjectUseCase(timeEntryRepo);
 const clockOutUseCase = new ClockOutUseCase(timeEntryRepo, breakRepo);
 const startBreakUseCase = new StartBreakUseCase(timeEntryRepo, breakRepo);
 const endBreakUseCase = new EndBreakUseCase(timeEntryRepo, breakRepo);
@@ -28,7 +30,7 @@ const cancelAbsenceUseCase = new CancelAbsenceUseCase();
 
 async function handleAction(
 	userId: string,
-	user: User,
+	user: AppUser,
 	body: {
 		action: string;
 		projectId?: number;
@@ -62,6 +64,26 @@ async function handleAction(
 				projectId: body.projectId,
 				roleId: body.roleId ?? null,
 				startTime: clientTime
+			});
+			return { status: await getWorkerStatus(userId) };
+		}
+
+		case 'switch-project': {
+			if (!body.projectId) throw new Error('projectId is required');
+			await getProjectAccess(body.projectId, user);
+
+			const projectRoles = await roleRepo.findByProjectId(body.projectId);
+			if (projectRoles.length > 0) {
+				if (!body.roleId) throw new Error('Select your role before switching');
+				const validRole = projectRoles.some((r) => r.id === body.roleId);
+				if (!validRole) throw new Error('Invalid role for this job site');
+			}
+
+			await switchProjectUseCase.execute({
+				userId,
+				projectId: body.projectId,
+				roleId: body.roleId ?? null,
+				switchTime: clientTime
 			});
 			return { status: await getWorkerStatus(userId) };
 		}
@@ -116,7 +138,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	try {
 		const body = await request.json();
-		const result = await handleAction(session.user.id, session.user, body);
+		const result = await handleAction(session.user.id, session.user as AppUser, body);
 		return json({ success: true, ...result });
 	} catch (error: unknown) {
 		const message = error instanceof Error ? error.message : 'Unknown error';

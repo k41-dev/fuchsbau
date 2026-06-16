@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { db } from '../../infrastructure/db/client';
 import { absence } from '../../infrastructure/db/schema';
 
@@ -8,7 +8,13 @@ export class CancelAbsenceUseCase {
 
 		const result = await db
 			.delete(absence)
-			.where(and(eq(absence.userId, userId), eq(absence.date, today)))
+			.where(
+				and(
+					eq(absence.userId, userId),
+					eq(absence.date, today),
+					inArray(absence.status, ['pending', 'approved'])
+				)
+			)
 			.returning();
 
 		if (result.length === 0) {
