@@ -3,7 +3,7 @@ import { db } from '../../infrastructure/db/client';
 import { absence, project, projectMember, user } from '../../infrastructure/db/schema';
 import type { AbsenceType } from '../absence';
 
-export async function canReviewWorkerAbsence(
+async function canReviewWorkerAbsence(
 	ownerId: string,
 	workerUserId: string
 ): Promise<boolean> {

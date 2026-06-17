@@ -1,12 +1,16 @@
 <script lang="ts">
 	import ProjectCover from '$lib/components/ProjectCover.svelte';
+	import { copyToClipboard } from '$lib/clipboard';
 	import type { PageData, ActionData } from './$types';
 	import { onMount, onDestroy } from 'svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let elapsedMap = $state<Record<number, string>>({});
+	let copiedInviteKey = $state<string | null>(null);
+	let copyFailed = $state(false);
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
+	let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function startLiveTimers() {
 		stopLiveTimers();
@@ -39,8 +43,25 @@
 		window.location.reload();
 	}
 
-	async function copyInviteLink(url: string) {
-		await navigator.clipboard.writeText(url);
+	async function copyInviteLink(key: string, url: string) {
+		const copied = await copyToClipboard(url);
+
+		if (copyResetTimer) clearTimeout(copyResetTimer);
+
+		if (copied) {
+			copiedInviteKey = key;
+			copyFailed = false;
+			copyResetTimer = setTimeout(() => {
+				if (copiedInviteKey === key) copiedInviteKey = null;
+			}, 2000);
+			return;
+		}
+
+		copiedInviteKey = null;
+		copyFailed = true;
+		copyResetTimer = setTimeout(() => {
+			copyFailed = false;
+		}, 3000);
 	}
 
 	$effect(() => {
@@ -48,7 +69,10 @@
 	});
 
 	onMount(startLiveTimers);
-	onDestroy(stopLiveTimers);
+	onDestroy(() => {
+		stopLiveTimers();
+		if (copyResetTimer) clearTimeout(copyResetTimer);
+	});
 
 	function getElapsed(entryId: number | null) {
 		if (!entryId) return '00:00:00';
@@ -507,12 +531,17 @@
 						/>
 						<button
 							type="button"
-							onclick={() => copyInviteLink(form.inviteUrl!)}
+							onclick={() => copyInviteLink(`new-${form.inviteUrl}`, form.inviteUrl!)}
 							class="h-10 px-4 rounded-xl border bg-white text-sm font-medium shrink-0"
 						>
-							Copy link
+							{copiedInviteKey === `new-${form.inviteUrl}` ? 'Copied!' : 'Copy link'}
 						</button>
 					</div>
+					{#if copyFailed}
+						<p class="mt-2 text-xs text-red-700">
+							Could not copy automatically. Select the link above and copy it manually.
+						</p>
+					{/if}
 				</div>
 			{:else if form?.memberAdded}
 				<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 mb-4 text-sm text-emerald-900">
@@ -555,10 +584,14 @@
 								<div class="flex gap-2 shrink-0">
 									<button
 										type="button"
-										onclick={() => copyInviteLink(`${window.location.origin}${invite.invitePath}`)}
+										onclick={() =>
+											copyInviteLink(
+												`pending-${invite.id}`,
+												`${window.location.origin}${invite.invitePath}`
+											)}
 										class="h-9 px-3 rounded-xl border text-xs font-medium"
 									>
-										Copy link
+										{copiedInviteKey === `pending-${invite.id}` ? 'Copied!' : 'Copy link'}
 									</button>
 									<form method="POST" action="?/revokeInvite">
 										<input type="hidden" name="inviteId" value={invite.id} />
